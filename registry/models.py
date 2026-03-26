@@ -22,9 +22,7 @@ from django.db import models
 from django.utils import timezone
 
 
-# ===========================================================================
 # Abstract Base: Soft Delete
-# ===========================================================================
 
 class SoftDeleteModel(models.Model):
     """
@@ -50,9 +48,7 @@ class SoftDeleteModel(models.Model):
     class Meta:
         abstract = True
 
-    # ------------------------------------------------------------------
     # Soft-delete lifecycle methods
-    # ------------------------------------------------------------------
 
     def delete(self, using=None, keep_parents=False):
         """Override default delete to perform a soft-delete instead."""
@@ -71,9 +67,7 @@ class SoftDeleteModel(models.Model):
         self.save(update_fields=["is_active", "deleted_at"])
 
 
-# ===========================================================================
 # Breeder
-# ===========================================================================
 
 class Breeder(SoftDeleteModel):
     """
@@ -115,9 +109,7 @@ class Breeder(SoftDeleteModel):
         return f"{self.name}{tag}"
 
 
-# ===========================================================================
 # Chicken
-# ===========================================================================
 
 class Chicken(SoftDeleteModel):
     """
@@ -130,9 +122,7 @@ class Chicken(SoftDeleteModel):
         - birth_category is permanent and must NOT be changed after registration.
     """
 
-    # ------------------------------------------------------------------
     # Enumerated choices
-    # ------------------------------------------------------------------
 
     class FeatherColor(models.TextChoices):
         BLACK      = "BLACK",     "Black"
@@ -173,10 +163,7 @@ class Chicken(SoftDeleteModel):
         NATIONAL    = "NATIONAL",    "National"
         LATE_BORN   = "LATE_BORN",   "Late Born"
 
-    # ------------------------------------------------------------------
     # Fields
-    # ------------------------------------------------------------------
-
     wingband_number = models.CharField(
         max_length=50,
         unique=True,    # Enforced at DB level — wingband is its own identity
@@ -247,9 +234,7 @@ class Chicken(SoftDeleteModel):
         )
 
 
-# ===========================================================================
 # Ownership History
-# ===========================================================================
 
 class OwnershipHistory(models.Model):
     """
@@ -317,9 +302,7 @@ class OwnershipHistory(models.Model):
         )
 
 
-# ===========================================================================
 # Audit Log
-# ===========================================================================
 
 class AuditLog(models.Model):
     """
