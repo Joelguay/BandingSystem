@@ -1,55 +1,22 @@
-"""
-Views for the Gamefowl Banding Registration and Verification System.
-
-All views are:
-    - Protected by @login_required (admin-only system)
-    - Function-based (simpler, easier to follow the exact logic flow)
-    - Responsible for calling log_action() after every state change
-
-Pattern used throughout:
-    GET  → render the form/page
-    POST → process the action, then redirect (PRG pattern)
-          PRG = Post/Redirect/Get — prevents duplicate submissions on refresh
-"""
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ChickenRegistrationForm
-from .models import AuditLog, Chicken
+from .models import AuditLog, Breeder, Chicken
 from .signals import log_action
 
-
-# ===========================================================================
 # View 1 — Register Chicken
-# ===========================================================================
 
 @login_required
 def register_chicken(request):
-    """
-    Register a new gamefowl with a unique wingband number.
-
-    GET  → Display the blank registration form.
-    POST → Validate and save. On success, redirect to the verify page
-           pre-filled with the new wingband so the admin can immediately
-           confirm the record was saved correctly.
-
-    AuditLog: A CREATE entry is written after every successful save.
-    """
-
     if request.method == "POST":
         form = ChickenRegistrationForm(request.POST)
 
         if form.is_valid():
-            # Save the chicken — birth_category is permanent from this point on.
-            # The form's clean_wingband_number() already confirmed uniqueness,
-            # but the DB unique constraint is the final safety net below.
             chicken = form.save()
 
-            # Write a CREATE audit log entry.
-            # details stores the wingband so the log is useful without
-            # having to look up the record separately.
             log_action(
                 user=request.user,
                 action=AuditLog.ActionType.CREATE,
@@ -67,20 +34,144 @@ def register_chicken(request):
                 f"Chicken [{chicken.wingband_number}] registered successfully.",
             )
 
-            # PRG: Redirect to verify page pre-filled with the new wingband.
-            # The admin can immediately confirm the record is searchable.
             return redirect(
                 f"{request.build_absolute_uri('/chickens/verify/')}?wingband={chicken.wingband_number}"
             )
 
-        # Form is invalid — fall through and re-render with errors.
-        # Django's form object already has the error messages attached.
-
     else:
-        # GET request — show a fresh blank form.
         form = ChickenRegistrationForm()
 
     return render(request, "registry/register_chicken.html", {
         "form": form,
         "page_title": "Register Chicken",
     })
+
+
+# View 2 — Verify Chicken
+
+@login_required
+def verify_chicken(request):
+    """
+    Search for a gamefowl by its exact wingband number.
+
+    GET (no param)               → Show blank search input.
+    GET (?wingband=WPC-2024-001) → Look up the wingband and return details.
+
+    Search logic:
+        - Only active chickens (is_active=True) are returned.
+        - A soft-deleted wingband returns a "not found / inactive" message —
+          it does NOT reveal that it exists to avoid confusion during events.
+        - Ownership history is fetched alongside the chicken record so the
+          full transfer chain is visible on one screen.
+
+    No AuditLog entry is written for searches — reads are not tracked.
+    """
+
+    chicken = None
+    ownership_history = []
+    search_term = request.GET.get("wingband", "").strip().upper()
+    error_message = None
+
+    if search_term:
+        try:
+            # Exact match only — wingband is an identifier, not a keyword.
+            chicken = Chicken.objects.select_related("breeder").get(
+                wingband_number=search_term,
+                is_active=True,
+            )
+            ownership_history = chicken.ownership_history.select_related(
+                "owner_breeder"
+            ).all()
+
+        except Chicken.DoesNotExist:
+            error_message = (
+                f'No active chicken found for wingband "{search_term}". '
+                "Verify the number and try again."
+            )
+
+    return render(request, "registry/verify_chicken.html", {
+        "page_title": "Verify Chicken",
+        "search_term": search_term,
+        "chicken": chicken,
+        "ownership_history": ownership_history,
+        "error_message": error_message,
+    })
+
+# View 3 — Chicken List
+
+@login_required
+def chicken_list(request):
+
+    queryset = Chicken.objects.filter(is_active=True).select_related("breeder")
+
+    # --- Optional filter: by Breeder ---
+    breeder_id = request.GET.get("breeder", "").strip()
+    if breeder_id.isdigit():
+        queryset = queryset.filter(breeder_id=int(breeder_id))
+
+    # --- Optional filter: by birth_category ---
+    category = request.GET.get("category", "").strip().upper()
+    if category in Chicken.BirthCategory.values:
+        queryset = queryset.filter(birth_category=category)
+
+    # --- Pagination ---
+    paginator = Paginator(queryset, 25)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    breeders = Breeder.objects.filter(is_active=True).order_by("name")
+
+    return render(request, "registry/chicken_list.html", {
+        "page_title": "Registered Chickens",
+        "page_obj": page_obj,
+        "breeders": breeders,
+        "birth_categories": Chicken.BirthCategory.choices,
+        
+        # dropdowns selected after filtering.
+        "selected_breeder": breeder_id,
+        "selected_category": category,
+    })
+
+
+# View 4 — Soft Delete Chicken
+
+@login_required
+def soft_delete_chicken(request, pk):
+    
+    if request.method != "POST":
+        return redirect("registry:chicken_list")
+
+    chicken = get_object_or_404(Chicken, pk=pk)
+
+    if not chicken.is_active:
+        messages.warning(
+            request,
+            f"Chicken [{chicken.wingband_number}] is already inactive.",
+        )
+        return redirect("registry:chicken_list")
+
+    wingband = chicken.wingband_number
+    breeder_name = chicken.breeder.name
+
+    chicken.delete()
+
+    log_action(
+        user=request.user,
+        action=AuditLog.ActionType.DELETE,
+        instance=chicken,
+        details={
+            "wingband_number": wingband,
+            "breeder": breeder_name,
+            "note": "soft-delete — record preserved in DB",
+        },
+    )
+
+    # Warning-level message: deletion is a destructive-ish action,
+    # use warning (orange) instead of success (green).
+    messages.warning(
+        request,
+        f"Chicken [{wingband}] has been deactivated. "
+        "The record is preserved and can be restored via Django Admin.",
+    )
+
+    return redirect("registry:chicken_list")
