@@ -12,9 +12,7 @@ from django import forms
 from .models import Breeder, Chicken
 
 
-# ===========================================================================
 # Chicken Registration Form
-# ===========================================================================
 
 class ChickenRegistrationForm(forms.ModelForm):
     """

@@ -1,22 +1,3 @@
-"""
-Registry Models for the Gamefowl Banding Registration and Verification System.
-
-Model hierarchy:
-    Breeder → Chicken → OwnershipHistory
-    AuditLog  (standalone — logs all admin actions system-wide)
-
-Design decisions baked in:
-    - SoftDeleteModel abstract base handles soft-delete on Breeder and Chicken.
-    - Wingband uniqueness is enforced at DB level (unique=True). A soft-deleted
-      wingband is still "taken" until the record is permanently (hard) deleted.
-    - Deleting a Breeder does NOT cascade to their Chickens. Chickens remain
-      active; the Breeder is simply marked inactive.
-    - OwnershipHistory stores both a FK to Breeder (preferred) AND a plain-text
-      owner_name (required fallback) to cover unregistered recipients.
-    - birth_category is permanent and cannot be changed after registration.
-    - AuditLog.user is nullable for safety but should never be intentionally NULL.
-"""
-
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
@@ -25,15 +6,6 @@ from django.utils import timezone
 # Abstract Base: Soft Delete
 
 class SoftDeleteModel(models.Model):
-    """
-    Abstract base that adds soft-delete semantics to any model.
-
-    Usage:
-        instance.delete()       → soft-deletes (sets is_active=False)
-        instance.hard_delete()  → permanently removes from DB
-        instance.restore()      → reverts a soft-delete
-    """
-
     is_active = models.BooleanField(
         default=True,
         db_index=True,
@@ -70,15 +42,6 @@ class SoftDeleteModel(models.Model):
 # Breeder
 
 class Breeder(SoftDeleteModel):
-    """
-    Represents a registered gamefowl breeder in the organization.
-
-    All chickens must be linked to a registered Breeder.
-    Soft-deleting a Breeder does NOT cascade to their Chickens.
-    Active chickens remain visible and verifiable even if their Breeder
-    is marked inactive — the FK relationship is preserved.
-    """
-
     name = models.CharField(
         max_length=255,
         help_text="Full name of the breeder or farm/stable owner.",
@@ -112,16 +75,6 @@ class Breeder(SoftDeleteModel):
 # Chicken
 
 class Chicken(SoftDeleteModel):
-    """
-    Represents a registered gamefowl with a unique wingband identifier.
-
-    CRITICAL RULES:
-        - wingband_number is defined UNIQUE at the database level.
-        - A soft-deleted wingband is still reserved; it cannot be re-registered
-          until the record is permanently (hard) deleted via hard_delete().
-        - birth_category is permanent and must NOT be changed after registration.
-    """
-
     # Enumerated choices
 
     class FeatherColor(models.TextChoices):
@@ -237,18 +190,6 @@ class Chicken(SoftDeleteModel):
 # Ownership History
 
 class OwnershipHistory(models.Model):
-    """
-    Immutable record of every ownership transfer for a gamefowl.
-
-    Design:
-        - owner_breeder (FK, optional): preferred link to a registered Breeder.
-        - owner_name (CharField, required): always-present text fallback so
-          history is never lost if a Breeder record is removed.
-        - date_transferred: the ACTUAL date of transfer (can be backdated).
-        - recorded_at: system timestamp of when the entry was typed in.
-
-    Records should never be edited after creation. Treat as append-only.
-    """
 
     chicken = models.ForeignKey(
         Chicken,
@@ -305,15 +246,6 @@ class OwnershipHistory(models.Model):
 # Audit Log
 
 class AuditLog(models.Model):
-    """
-    System-wide audit trail recording every admin action.
-
-    Populated via Django signals (post_save, post_delete) — see signals.py.
-
-    RULE: user is nullable for technical safety only. Any log entry where
-    user IS NULL indicates a system/signal-fired event with no request context.
-    Never intentionally pass user=None from application code.
-    """
 
     class ActionType(models.TextChoices):
         CREATE    = "CREATE",    "Create"

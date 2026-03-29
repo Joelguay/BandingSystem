@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .forms import ChickenRegistrationForm
 from .models import AuditLog, Breeder, Chicken
@@ -35,7 +36,7 @@ def register_chicken(request):
             )
 
             return redirect(
-                f"{request.build_absolute_uri('/chickens/verify/')}?wingband={chicken.wingband_number}"
+                f"{reverse('registry:verify_chicken')}?wingband={chicken.wingband_number}"
             )
 
     else:
@@ -51,21 +52,6 @@ def register_chicken(request):
 
 @login_required
 def verify_chicken(request):
-    """
-    Search for a gamefowl by its exact wingband number.
-
-    GET (no param)               → Show blank search input.
-    GET (?wingband=WPC-2024-001) → Look up the wingband and return details.
-
-    Search logic:
-        - Only active chickens (is_active=True) are returned.
-        - A soft-deleted wingband returns a "not found / inactive" message —
-          it does NOT reveal that it exists to avoid confusion during events.
-        - Ownership history is fetched alongside the chicken record so the
-          full transfer chain is visible on one screen.
-
-    No AuditLog entry is written for searches — reads are not tracked.
-    """
 
     chicken = None
     ownership_history = []
