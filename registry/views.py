@@ -5,9 +5,34 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import ChickenRegistrationForm
-from .models import AuditLog, Breeder, Chicken
+from .models import AuditLog, Breeder, Chicken, OwnershipHistory
 from .signals import log_action
 
+# ===========================================================================
+# Dashboard
+# ===========================================================================
+
+@login_required
+def dashboard(request):
+    """
+    Home screen shown after login.
+    Displays summary stat cards and the 5 most recently registered chickens.
+    """
+    return render(request, "registry/dashboard.html", {
+        "page_title": "Dashboard",
+        "total_chickens":  Chicken.objects.filter(is_active=True).count(),
+        "total_breeders":  Breeder.objects.filter(is_active=True).count(),
+        "total_transfers": OwnershipHistory.objects.count(),
+        "recent_chickens": (
+            Chicken.objects
+            .filter(is_active=True)
+            .select_related("breeder")
+            .order_by("-created_at")[:5]
+        ),
+    })
+
+
+# ===========================================================================
 # View 1 — Register Chicken
 
 @login_required

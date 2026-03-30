@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- Stat Cards -->
+<div class="grid grid-cols-3 gap-6 mb-8">
+
+  <!-- Total Chickens -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm font-medium text-gray-500">Active Chickens</p>
+      <div class="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-gray-800">{{ total_chickens }}</p>
+    <a href="{% url 'registry:chicken_list' %}" class="text-xs text-indigo-600 hover:underline mt-1 inline-block">
+      View all →
+    </a>
+  </div>
+
+  <!-- Total Breeders -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm font-medium text-gray-500">Registered Breeders</p>
+      <div class="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-gray-800">{{ total_breeders }}</p>
+    <a href="/admin/registry/breeder/" target="_blank" class="text-xs text-emerald-600 hover:underline mt-1 inline-block">
+      Manage breeders →
+    </a>
+  </div>
+
+  <!-- Total Transfers -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm font-medium text-gray-500">Ownership Transfers</p>
+      <div class="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-gray-800">{{ total_transfers }}</p>
+    <a href="/admin/registry/ownershiphistory/" target="_blank" class="text-xs text-amber-600 hover:underline mt-1 inline-block">
+      View transfers →
+    </a>
+  </div>
+
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-2 gap-4 mb-8">
+  <a href="{% url 'registry:register_chicken' %}"
+     class="flex items-center gap-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 py-4 transition-colors shadow-sm">
+    <div class="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+    </div>
+    <div>
+      <p class="font-semibold">Register Chicken</p>
+      <p class="text-indigo-200 text-xs">Add a new wingband record</p>
+    </div>
+  </a>
+
+  <a href="{% url 'registry:verify_chicken' %}"
+     class="flex items-center gap-4 bg-white hover:bg-gray-50 text-gray-800 rounded-xl px-6 py-4 transition-colors shadow-sm border border-gray-200">
+    <div class="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="font-semibold">Verify Wingband</p>
+      <p class="text-gray-400 text-xs">Look up a chicken by wingband number</p>
+    </div>
+  </a>
+</div>
+
+<!-- Recent Registrations -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <h2 class="text-sm font-semibold text-gray-700">Recent Registrations</h2>
+    <a href="{% url 'registry:chicken_list' %}" class="text-xs text-indigo-600 hover:underline">View all</a>
+  </div>
+
+  {% if recent_chickens %}
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 bg-gray-50">
+        <th class="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-6 py-3">Wingband</th>
+        <th class="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-6 py-3">Breeder</th>
+        <th class="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-6 py-3">Category</th>
+        <th class="text-left text-xs font-medium text-gray-400 uppercase tracking-wide px-6 py-3">Registered</th>
+        <th class="px-6 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for chicken in recent_chickens %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-6 py-3 font-mono font-semibold text-indigo-700">{{ chicken.wingband_number }}</td>
+        <td class="px-6 py-3 text-gray-700">{{ chicken.breeder.name }}</td>
+        <td class="px-6 py-3">
+          <span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">
+            {{ chicken.get_birth_category_display }}
+          </span>
+        </td>
+        <td class="px-6 py-3 text-gray-400 text-xs">{{ chicken.created_at|date:"M d, Y" }}</td>
+        <td class="px-6 py-3 text-right">
+          <a href="{% url 'registry:verify_chicken' %}?wingband={{ chicken.wingband_number }}"
+             class="text-xs text-indigo-600 hover:underline">Verify →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <div class="px-6 py-12 text-center">
+    <p class="text-gray-400 text-sm">No chickens registered yet.</p>
+    <a href="{% url 'registry:register_chicken' %}" class="text-indigo-600 text-sm hover:underline mt-2 inline-block">
+      Register the first one →
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

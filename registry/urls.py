@@ -5,6 +5,9 @@ from . import views
 app_name = "registry"
 
 urlpatterns = [
+    # Root — Dashboard 
+    path("", views.dashboard, name="dashboard"),
+
     #Chicken List (dashboard)
     path("chickens/", views.chicken_list, name="chicken_list"),
 
