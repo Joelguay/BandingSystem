@@ -1,12 +1,10 @@
 from django.contrib import admin
+from django.http import JsonResponse  # noqa: F401 — kept here for module-level import consistency
 
 from .models import AuditLog, Breeder, Chicken, OwnershipHistory
 from .signals import log_action
 
-
-# ===========================================================================
 # Breeder Admin — with full AuditLog integration
-# ===========================================================================
 
 @admin.register(Breeder)
 class BreederAdmin(admin.ModelAdmin):
@@ -19,27 +17,17 @@ class BreederAdmin(admin.ModelAdmin):
     list_per_page = 25
 
     def save_model(self, request, obj, form, change):
-        """
-        Hook called by Django Admin every time a Breeder is saved.
-        'change=True'  → UPDATE (existing record edited)
-        'change=False' → CREATE (new record being added)
-        """
         super().save_model(request, obj, form, change)
 
         action = AuditLog.ActionType.UPDATE if change else AuditLog.ActionType.CREATE
         details = {"name": obj.name, "location": obj.location}
 
         if change and form.changed_data:
-            # Record which fields were changed for the UPDATE log
             details["changed_fields"] = form.changed_data
 
         log_action(user=request.user, action=action, instance=obj, details=details)
 
     def delete_model(self, request, obj):
-        """
-        Hook called when a single Breeder is deleted via the admin detail page.
-        Captures name before delete since soft-delete preserves the row.
-        """
         details = {
             "name": obj.name,
             "location": obj.location,
@@ -48,10 +36,23 @@ class BreederAdmin(admin.ModelAdmin):
         super().delete_model(request, obj)  # triggers SoftDeleteModel.delete()
         log_action(user=request.user, action=AuditLog.ActionType.DELETE, instance=obj, details=details)
 
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            details = {
+                "name": obj.name,
+                "location": obj.location,
+                "note": "soft-deleted via Admin bulk action",
+            }
+            obj.delete()  # calls SoftDeleteModel.delete() — sets is_active=False
+            log_action(
+                user=request.user,
+                action=AuditLog.ActionType.DELETE,
+                instance=obj,
+                details=details,
+            )
 
-# ===========================================================================
+
 # Chicken Admin — with full AuditLog integration
-# ===========================================================================
 
 @admin.register(Chicken)
 class ChickenAdmin(admin.ModelAdmin):
@@ -110,10 +111,23 @@ class ChickenAdmin(admin.ModelAdmin):
         super().delete_model(request, obj)
         log_action(user=request.user, action=AuditLog.ActionType.DELETE, instance=obj, details=details)
 
+    def delete_queryset(self, request, queryset):
+        for obj in queryset:
+            details = {
+                "wingband_number": obj.wingband_number,
+                "breeder": obj.breeder.name,
+                "note": "soft-deleted via Admin bulk action",
+            }
+            obj.delete()  # calls SoftDeleteModel.delete() — sets is_active=False
+            log_action(
+                user=request.user,
+                action=AuditLog.ActionType.DELETE,
+                instance=obj,
+                details=details,
+            )
 
-# ===========================================================================
-# Ownership History Admin — append-only, no saving hooks needed
-# ===========================================================================
+
+# Ownership History Admin — append-only, locked
 
 @admin.register(OwnershipHistory)
 class OwnershipHistoryAdmin(admin.ModelAdmin):
@@ -139,14 +153,17 @@ class OwnershipHistoryAdmin(admin.ModelAdmin):
         "notes",
     )
 
+    # Ownership history must not be manually created or deleted
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     ordering = ("-date_transferred", "-recorded_at")
     list_per_page = 25
 
-
-# ===========================================================================
-# Audit Log Admin — immutable, no add/delete, all fields read-only
-# ===========================================================================
-
+# Audit Log Admin — immutable, no add/delete/change, all fields read-only
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
 
@@ -164,14 +181,13 @@ class AuditLogAdmin(admin.ModelAdmin):
         "timestamp",
     )
 
-    # No one can manually add or delete audit log entries
+    # No one can manually add, delete, or edit audit log entries
     def has_add_permission(self, request):
         return False
 
     def has_delete_permission(self, request, obj=None):
         return False
 
-    # No one can change an existing audit log entry
     def has_change_permission(self, request, obj=None):
         return False
 
