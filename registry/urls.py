@@ -5,7 +5,7 @@ from . import views
 app_name = "registry"
 
 urlpatterns = [
-    # Root — Dashboard 
+    # Root — Dashboard
     path("", views.dashboard, name="dashboard"),
 
     #Chicken List (dashboard)
@@ -16,6 +16,10 @@ urlpatterns = [
 
     #Verify a chicken by wingband
     path("chickens/verify/", views.verify_chicken, name="verify_chicken"),
+
+    # Autocomplete — JSON endpoint for wingband prefix search
+    # Usage: GET /chickens/autocomplete/?q=WPC-2024
+    path("chickens/autocomplete/", views.wingband_autocomplete, name="wingband_autocomplete"),
 
     # Soft delete a chicken
     path("chickens/<int:pk>/delete/", views.soft_delete_chicken, name="soft_delete_chicken"),

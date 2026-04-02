@@ -9,13 +9,8 @@ from .models import AuditLog, Breeder, Chicken, OwnershipHistory
 from .signals import log_action
 
 # Dashboard
-
 @login_required
 def dashboard(request):
-    """
-    Home screen shown after login.
-    Displays summary stat cards and the 5 most recently registered chickens.
-    """
     return render(request, "registry/dashboard.html", {
         "page_title": "Dashboard",
         "total_chickens":  Chicken.objects.filter(is_active=True).count(),
@@ -105,6 +100,28 @@ def verify_chicken(request):
         "error_message": error_message,
     })
 
+# Autocomplete — Wingband Prefix Search (JSON)
+
+@login_required
+def wingband_autocomplete(request):
+    from django.http import JsonResponse
+
+    query = request.GET.get("q", "").strip().upper()
+
+    if not query or len(query) < 2:
+        return JsonResponse({"results": []})
+
+    matches = (
+        Chicken.objects
+        .filter(wingband_number__istartswith=query, is_active=True)
+        .only("wingband_number")          # single-column projection
+        .order_by("wingband_number")
+        .values_list("wingband_number", flat=True)[:10]   # hard cap
+    )
+
+    return JsonResponse({"results": list(matches)})
+
+
 # View 3 — Chicken List
 
 @login_required
@@ -184,37 +201,10 @@ def soft_delete_chicken(request, pk):
     return redirect("registry:chicken_list")
 
 
-# ===========================================================================
 # View 5 — Edit Chicken (correction only)
-# ===========================================================================
 
 @login_required
 def edit_chicken(request, pk):
-    """
-    Allow corrections to a chicken's physical attributes.
-
-    IMMUTABLE FIELDS (enforced by ChickenEditForm exclusion):
-        - wingband_number → never editable, ever
-        - birth_category  → never editable, ever
-
-    EDITABLE FIELDS (corrections only):
-        - breeder, color, comb_type, leg_color
-
-    Audit trail:
-        Every save writes an UPDATE entry with a field-by-field diff:
-        {
-          "wingband_number": "WPC-001",
-          "changed_fields": {
-            "color": {"from": "Red", "to": "Black"},
-            "breeder": {"from": "Juan dela Cruz", "to": "Pedro Reyes"}
-          }
-        }
-        If nothing actually changed, no log entry is written.
-
-    GET  → Show current values pre-filled in the edit form.
-    POST → Validate, diff, save, log, redirect to verify page.
-    """
-
     # Active-only — soft-deleted chickens cannot be edited
     chicken = get_object_or_404(Chicken, pk=pk, is_active=True)
 
@@ -222,13 +212,8 @@ def edit_chicken(request, pk):
         form = ChickenEditForm(request.POST, instance=chicken)
 
         if form.is_valid():
-            # ---------------------------------------------------------------
-            # Capture BEFORE values for every changed field
-            # Must happen BEFORE form.save() overwrites the instance.
-            # ---------------------------------------------------------------
             changed_fields = {}
             for field_name in form.changed_data:
-                # Get the human-readable "from" value
                 display_method = f"get_{field_name}_display"
                 if hasattr(chicken, display_method):
                     # Choice field → use Django's get_FOO_display()
@@ -243,9 +228,7 @@ def edit_chicken(request, pk):
             # Now save — instance is updated in-place
             updated = form.save()
 
-            # ---------------------------------------------------------------
             # Capture AFTER values for every changed field
-            # ---------------------------------------------------------------
             for field_name in changed_fields:
                 display_method = f"get_{field_name}_display"
                 if hasattr(updated, display_method):
@@ -257,11 +240,9 @@ def edit_chicken(request, pk):
 
                 changed_fields[field_name]["to"] = new_value
 
-            # ---------------------------------------------------------------
             # Only log if something actually changed
             # (form.changed_data can sometimes be populated even if values
             #  are identical due to type coercion — the diff catches that)
-            # ---------------------------------------------------------------
             actual_changes = {
                 k: v for k, v in changed_fields.items()
                 if v["from"] != v["to"]
