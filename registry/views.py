@@ -4,7 +4,7 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import ChickenRegistrationForm
+from .forms import ChickenEditForm, ChickenRegistrationForm
 from .models import AuditLog, Breeder, Chicken, OwnershipHistory
 from .signals import log_action
 
@@ -182,3 +182,121 @@ def soft_delete_chicken(request, pk):
     )
 
     return redirect("registry:chicken_list")
+
+
+# ===========================================================================
+# View 5 — Edit Chicken (correction only)
+# ===========================================================================
+
+@login_required
+def edit_chicken(request, pk):
+    """
+    Allow corrections to a chicken's physical attributes.
+
+    IMMUTABLE FIELDS (enforced by ChickenEditForm exclusion):
+        - wingband_number → never editable, ever
+        - birth_category  → never editable, ever
+
+    EDITABLE FIELDS (corrections only):
+        - breeder, color, comb_type, leg_color
+
+    Audit trail:
+        Every save writes an UPDATE entry with a field-by-field diff:
+        {
+          "wingband_number": "WPC-001",
+          "changed_fields": {
+            "color": {"from": "Red", "to": "Black"},
+            "breeder": {"from": "Juan dela Cruz", "to": "Pedro Reyes"}
+          }
+        }
+        If nothing actually changed, no log entry is written.
+
+    GET  → Show current values pre-filled in the edit form.
+    POST → Validate, diff, save, log, redirect to verify page.
+    """
+
+    # Active-only — soft-deleted chickens cannot be edited
+    chicken = get_object_or_404(Chicken, pk=pk, is_active=True)
+
+    if request.method == "POST":
+        form = ChickenEditForm(request.POST, instance=chicken)
+
+        if form.is_valid():
+            # ---------------------------------------------------------------
+            # Capture BEFORE values for every changed field
+            # Must happen BEFORE form.save() overwrites the instance.
+            # ---------------------------------------------------------------
+            changed_fields = {}
+            for field_name in form.changed_data:
+                # Get the human-readable "from" value
+                display_method = f"get_{field_name}_display"
+                if hasattr(chicken, display_method):
+                    # Choice field → use Django's get_FOO_display()
+                    old_value = getattr(chicken, display_method)()
+                elif field_name == "breeder":
+                    old_value = chicken.breeder.name if chicken.breeder else "—"
+                else:
+                    old_value = str(getattr(chicken, field_name))
+
+                changed_fields[field_name] = {"from": old_value}
+
+            # Now save — instance is updated in-place
+            updated = form.save()
+
+            # ---------------------------------------------------------------
+            # Capture AFTER values for every changed field
+            # ---------------------------------------------------------------
+            for field_name in changed_fields:
+                display_method = f"get_{field_name}_display"
+                if hasattr(updated, display_method):
+                    new_value = getattr(updated, display_method)()
+                elif field_name == "breeder":
+                    new_value = updated.breeder.name if updated.breeder else "—"
+                else:
+                    new_value = str(getattr(updated, field_name))
+
+                changed_fields[field_name]["to"] = new_value
+
+            # ---------------------------------------------------------------
+            # Only log if something actually changed
+            # (form.changed_data can sometimes be populated even if values
+            #  are identical due to type coercion — the diff catches that)
+            # ---------------------------------------------------------------
+            actual_changes = {
+                k: v for k, v in changed_fields.items()
+                if v["from"] != v["to"]
+            }
+
+            if actual_changes:
+                log_action(
+                    user=request.user,
+                    action=AuditLog.ActionType.UPDATE,
+                    instance=updated,
+                    details={
+                        "wingband_number": updated.wingband_number,
+                        "changed_fields": actual_changes,
+                        "note": "correction edit via frontend",
+                    },
+                )
+                messages.success(
+                    request,
+                    f"Chicken [{updated.wingband_number}] updated. "
+                    f"{len(actual_changes)} field(s) changed.",
+                )
+            else:
+                # No real changes — still redirect, but no log entry
+                messages.info(request, "No changes were made.")
+
+            return redirect(
+                f"{reverse('registry:verify_chicken')}?wingband={updated.wingband_number}"
+            )
+
+    else:
+        # GET — pre-fill form with current values
+        form = ChickenEditForm(instance=chicken)
+
+    return render(request, "registry/edit_chicken.html", {
+        "form": form,
+        "chicken": chicken,
+        "page_title": f"Edit — {chicken.wingband_number}",
+    })

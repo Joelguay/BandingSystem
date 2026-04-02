@@ -107,6 +107,9 @@
             <a href="{% url 'registry:verify_chicken' %}?wingband={{ chicken.wingband_number }}"
                class="text-xs text-indigo-600 hover:underline mr-3">Verify</a>
 
+            <a href="{% url 'registry:edit_chicken' chicken.pk %}"
+               class="text-xs text-amber-600 hover:underline mr-3">Edit</a>
+
             <!-- Delete form — POST only, no JS needed -->
             <form method="post"
                   action="{% url 'registry:soft_delete_chicken' chicken.pk %}"

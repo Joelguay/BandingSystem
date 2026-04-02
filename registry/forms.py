@@ -54,3 +54,30 @@ class ChickenRegistrationForm(forms.ModelForm):
             )
 
         return wingband
+
+
+# ===========================================================================
+# Chicken Edit Form
+# ===========================================================================
+
+class ChickenEditForm(forms.ModelForm):
+    """
+    Form for correcting a chicken's physical attributes.
+
+    PERMANENT EXCLUSIONS — these fields are NEVER in this form:
+        - wingband_number : the chicken's identity — immutable by design
+        - birth_category  : permanent classification — set once at registration
+
+    Only allows corrections to: breeder, color, comb_type, leg_color.
+    """
+
+    class Meta:
+        model = Chicken
+        fields = ["breeder", "color", "comb_type", "leg_color"]
+        # wingband_number and birth_category are intentionally absent
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only active breeders can receive reassigned chickens
+        self.fields["breeder"].queryset = Breeder.objects.filter(is_active=True)
+        self.fields["breeder"].empty_label = "— Select a Breeder —"
