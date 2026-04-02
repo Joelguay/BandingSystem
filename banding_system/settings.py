@@ -1,10 +1,3 @@
-"""
-Django settings for banding_system project.
-
-Configuration is loaded from environment variables via a .env file.
-See .env.example for required variables.
-"""
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv

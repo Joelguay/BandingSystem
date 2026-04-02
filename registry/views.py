@@ -8,9 +8,7 @@ from .forms import ChickenRegistrationForm
 from .models import AuditLog, Breeder, Chicken, OwnershipHistory
 from .signals import log_action
 
-# ===========================================================================
 # Dashboard
-# ===========================================================================
 
 @login_required
 def dashboard(request):
@@ -32,7 +30,6 @@ def dashboard(request):
     })
 
 
-# ===========================================================================
 # View 1 — Register Chicken
 
 @login_required
@@ -177,7 +174,6 @@ def soft_delete_chicken(request, pk):
         },
     )
 
-    # Warning-level message: deletion is a destructive-ish action,
     # use warning (orange) instead of success (green).
     messages.warning(
         request,
